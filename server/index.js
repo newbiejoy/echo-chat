@@ -13,7 +13,6 @@ const fs = require('fs')
 const multer = require('multer')
 const Message = require('./models/Message')
 
-// Create uploads directory if it doesn't exist (needed for Render deploys)
 const uploadsDir = path.join(__dirname, 'uploads')
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir)
@@ -25,7 +24,6 @@ const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').trim()
 
 const httpServer = createServer(app)
 
-// ---- CORS: allow multiple origins (local dev, production, Vercel previews) ----
 const allowedOrigins = [
   'http://localhost:5173',
   'https://chat-app-will-name-it-later.vercel.app',
@@ -33,11 +31,9 @@ const allowedOrigins = [
 ]
 
 function corsOriginCheck(origin, callback) {
-  // Allow requests with no origin (e.g. curl, server-to-server, Postman)
   if (!origin) return callback(null, true)
 
   const isAllowedList = allowedOrigins.includes(origin)
-  // Also allow any Vercel preview deployment for this project
   const isVercelPreview = /^https:\/\/chat-app-will-name-it-later.*\.vercel\.app$/.test(origin)
 
   if (isAllowedList || isVercelPreview) {
@@ -47,7 +43,6 @@ function corsOriginCheck(origin, callback) {
   }
 }
 
-// Allow connections from the client (localhost in dev, deployed URL(s) in production)
 const io = new Server(httpServer, {
   cors: {
     origin: corsOriginCheck,
