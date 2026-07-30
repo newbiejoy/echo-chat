@@ -180,15 +180,11 @@ function App() {
     })
   }
 
-  /**
-   * Send a message — either private or global depending on selectedUser.
-   * text: the message text (can be empty if sending a file only)
-   * file: optional file object { url, name, type } from the upload
-   */
+
   const handleSendMessage = useCallback((text, file) => {
     if (!selectedUser) return
 
-    // Must have either text or a file
+
     const hasText = text && text.trim()
     if (!hasText && !file) return
 
@@ -219,7 +215,6 @@ function App() {
     socket.disconnect()
   }
 
-  // ===== Render =====
 
   if (!username) {
     return <UsernameScreen onJoin={handleJoin} />
