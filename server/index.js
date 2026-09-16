@@ -205,6 +205,19 @@ io.on('connection', (socket) => {
       }
     }
 
+    // Save to MongoDB first so we get a real _id
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const saved = await Message.create(message)
+        message._id = saved._id.toString()
+      } catch (err) {
+        console.error('Failed to save message:', err.message)
+        // Generate a temporary ID so client can still track the message
+        message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
+      }
+    } else {
+      message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
+    }
 
     // Send to recipient (if online)
     if (recipientSocketId) {
@@ -213,15 +226,6 @@ io.on('connection', (socket) => {
 
     // Send back to sender
     socket.emit('message:receive', message)
-
-    // Save to MongoDB (don't block on this)
-    if (mongoose.connection.readyState === 1) {
-      try {
-        await Message.create(message)
-      } catch (err) {
-        console.error('Failed to save message:', err.message)
-      }
-    }
   })
 
   /*
@@ -257,17 +261,21 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Broadcast to ALL connected users (including sender)
-    io.emit('message:globalReceive', message)
-
-    // Save to MongoDB (don't block on this)
+    // Save to MongoDB first so we get a real _id
     if (mongoose.connection.readyState === 1) {
       try {
-        await Message.create(message)
+        const saved = await Message.create(message)
+        message._id = saved._id.toString()
       } catch (err) {
         console.error('Failed to save global message:', err.message)
+        message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
       }
+    } else {
+      message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
     }
+
+    // Broadcast to ALL connected users (including sender)
+    io.emit('message:globalReceive', message)
   })
 
   /*
@@ -304,6 +312,7 @@ io.on('connection', (socket) => {
 
       // Send back only the fields the client needs
       const cleaned = messages.map((msg) => ({
+        _id: msg._id.toString(),
         from: msg.from,
         to: msg.to,
         text: msg.text,
@@ -337,6 +346,7 @@ io.on('connection', (socket) => {
         .lean()
 
       const cleaned = messages.map((msg) => ({
+        _id: msg._id.toString(),
         from: msg.from,
         to: msg.to,
         text: msg.text,
@@ -348,6 +358,61 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Failed to load global history:', err.message)
       callback([])
+    }
+  })
+
+  /*
+    "message:delete" — Delete a message for everyone.
+    
+    Data shape: { messageId: "abc123", chatPartner: "username" or "__global__" }
+    
+    Only the sender of the message can delete it.
+    Removes from DB and notifies all relevant users.
+  */
+  socket.on('message:delete', async (data) => {
+    const myUsername = socketToUser.get(socket.id)
+    if (!myUsername) return
+
+    const { messageId, chatPartner } = data
+    if (!messageId || !chatPartner) return
+
+    // Temporary IDs (messages not saved to DB) — just broadcast deletion
+    if (messageId.startsWith('tmp_')) {
+      if (chatPartner === '__global__') {
+        io.emit('message:deleted', { messageId, chatPartner })
+      } else {
+        socket.emit('message:deleted', { messageId, chatPartner })
+        const recipientSocketId = onlineUsers.get(chatPartner)
+        if (recipientSocketId) {
+          io.to(recipientSocketId).emit('message:deleted', { messageId, chatPartner: myUsername })
+        }
+      }
+      return
+    }
+
+    if (mongoose.connection.readyState !== 1) return
+
+    try {
+      // Find the message and verify the sender owns it
+      const msg = await Message.findById(messageId)
+      if (!msg) return
+      if (msg.from !== myUsername) return  // Only sender can delete
+
+      await Message.findByIdAndDelete(messageId)
+
+      if (chatPartner === '__global__') {
+        // Broadcast to everyone for global messages
+        io.emit('message:deleted', { messageId, chatPartner: '__global__' })
+      } else {
+        // Notify both sender and recipient for private messages
+        socket.emit('message:deleted', { messageId, chatPartner })
+        const recipientSocketId = onlineUsers.get(msg.to === myUsername ? msg.from : msg.to)
+        if (recipientSocketId) {
+          io.to(recipientSocketId).emit('message:deleted', { messageId, chatPartner: myUsername })
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete message:', err.message)
     }
   })
 

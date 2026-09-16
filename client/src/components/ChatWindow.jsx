@@ -10,12 +10,12 @@
   5. The recipient sees the image inline or a PDF download link
 */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 // Server URL for file uploads
 const SERVER_URL = 'http://localhost:5000'
 
-function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlobal, loadingHistory }) {
+function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, currentUser, isGlobal, loadingHistory }) {
   const [inputText, setInputText] = useState('')
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -24,10 +24,22 @@ function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlob
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
 
+  // Context menu state for "Delete for Everyone"
+  const [contextMenu, setContextMenu] = useState(null) // { x, y, messageId }
+
   // Auto-scroll to bottom when new messages come in
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Close context menu when clicking anywhere
+  useEffect(() => {
+    function handleClick() {
+      setContextMenu(null)
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
 
   function handleSend() {
     if (!inputText.trim()) return
@@ -96,6 +108,27 @@ function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlob
     }
   }
 
+  /**
+   * Right-click handler for messages — shows context menu with "Delete for Everyone"
+   */
+  const handleContextMenu = useCallback((e, msg) => {
+    if (msg.from !== currentUser) return // Only allow deleting own messages
+    e.preventDefault()
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      messageId: msg._id
+    })
+  }, [currentUser])
+
+  /**
+   * Delete button click — quick delete via the trash icon
+   */
+  const handleDelete = useCallback((messageId) => {
+    onDeleteMessage(messageId)
+    setContextMenu(null)
+  }, [onDeleteMessage])
+
   // No user selected — show empty state
   if (!selectedUser) {
     return (
@@ -111,7 +144,7 @@ function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlob
   const displayName = isGlobal ? '🌍 Global Chat' : selectedUser
 
   return (
-    <main className="flex-1 flex flex-col bg-dark-950 h-full">
+    <main className="flex-1 flex flex-col bg-dark-950 h-full relative">
       {/* Chat header */}
       <div className="px-5 py-3 bg-dark-900 border-b border-dark-700 flex items-center gap-3">
         {!isGlobal && (
@@ -140,9 +173,25 @@ function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlob
 
           return (
             <div
-              key={index}
-              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+              key={msg._id || index}
+              className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group`}
+              onContextMenu={(e) => handleContextMenu(e, msg)}
             >
+              {/* Delete button — visible on hover for own messages */}
+              {isOwn && msg._id && (
+                <button
+                  onClick={() => handleDelete(msg._id)}
+                  title="Delete for everyone"
+                  className="self-center mr-1 p-1 rounded-md opacity-0 group-hover:opacity-100
+                             text-text-muted hover:text-red-400 hover:bg-dark-800
+                             transition-all duration-150 cursor-pointer text-xs"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.519.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              )}
+
               <div
                 className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
                   isOwn
@@ -175,6 +224,26 @@ function ChatWindow({ selectedUser, messages, onSendMessage, currentUser, isGlob
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Context menu for "Delete for Everyone" */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-dark-900 border border-dark-700 rounded-lg shadow-xl py-1 min-w-[180px]"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleDelete(contextMenu.messageId)}
+            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-dark-800
+                       transition-colors cursor-pointer flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.519.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+            </svg>
+            Delete for Everyone
+          </button>
+        </div>
+      )}
 
       {/* Upload error banner */}
       {uploadError && (

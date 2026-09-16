@@ -6,6 +6,31 @@ import UsernameScreen from './components/UsernameScreen'
 import Sidebar from './components/Sidebar'
 import ChatWindow from './components/ChatWindow'
 
+/**
+ * Merge history messages with any real-time messages already in state.
+ * Deduplicates by _id. History comes first, then any real-time messages
+ * that weren't in the history (i.e., arrived after the DB query ran).
+ */
+function mergeMessages(historyMessages, existingMessages) {
+  const seenIds = new Set()
+  const merged = []
+
+  // Add all history messages first
+  for (const msg of historyMessages) {
+    if (msg._id) seenIds.add(msg._id)
+    merged.push(msg)
+  }
+
+  // Then add any existing real-time messages that aren't already in history
+  for (const msg of existingMessages) {
+    if (msg._id && seenIds.has(msg._id)) continue // Skip duplicates
+    merged.push(msg)
+  }
+
+  return merged
+}
+
+// Special key for the global chat conversation
 const GLOBAL_KEY = '__global__'
 
 function App() {
@@ -70,10 +95,17 @@ function App() {
     function handleMessage(message) {
       const partner = message.from === username ? message.to : message.from
 
-      setMessages((prev) => ({
-        ...prev,
-        [partner]: [...(prev[partner] || []), message]
-      }))
+      setMessages((prev) => {
+        const existing = prev[partner] || []
+        // Skip if we already have this message (by _id)
+        if (message._id && existing.some((m) => m._id === message._id)) {
+          return prev
+        }
+        return {
+          ...prev,
+          [partner]: [...existing, message]
+        }
+      })
 
       // Mark as unread if the message is from someone else and not currently selected
       if (message.from !== username && message.from !== selectedUserRef.current) {
@@ -86,10 +118,17 @@ function App() {
     }
 
     function handleGlobalMessage(message) {
-      setMessages((prev) => ({
-        ...prev,
-        [GLOBAL_KEY]: [...(prev[GLOBAL_KEY] || []), message]
-      }))
+      setMessages((prev) => {
+        const existing = prev[GLOBAL_KEY] || []
+        // Skip if we already have this message (by _id)
+        if (message._id && existing.some((m) => m._id === message._id)) {
+          return prev
+        }
+        return {
+          ...prev,
+          [GLOBAL_KEY]: [...existing, message]
+        }
+      })
 
       if (message.from !== username && selectedUserRef.current !== GLOBAL_KEY) {
         setUnreadFrom((prev) => {
@@ -100,9 +139,22 @@ function App() {
       }
     }
 
+    // Message deleted by sender (for everyone)
+    function handleMessageDeleted({ messageId, chatPartner }) {
+      setMessages((prev) => {
+        const key = chatPartner
+        if (!prev[key]) return prev
+        return {
+          ...prev,
+          [key]: prev[key].filter((msg) => msg._id !== messageId)
+        }
+      })
+    }
+
     socket.on('users:online', handleOnlineUsers)
     socket.on('message:receive', handleMessage)
     socket.on('message:globalReceive', handleGlobalMessage)
+    socket.on('message:deleted', handleMessageDeleted)
 
     socket.on('connect', handleConnect)
 
@@ -117,6 +169,7 @@ function App() {
       socket.off('users:online', handleOnlineUsers)
       socket.off('message:receive', handleMessage)
       socket.off('message:globalReceive', handleGlobalMessage)
+      socket.off('message:deleted', handleMessageDeleted)
     }
   }, [username])
 
@@ -129,19 +182,21 @@ function App() {
     setLoadingHistory(true)
 
     if (selectedUser === GLOBAL_KEY) {
+      // Load global chat history — merge with any real-time messages
       socket.emit('message:globalHistory', (history) => {
         setMessages((prev) => ({
           ...prev,
-          [GLOBAL_KEY]: history
+          [GLOBAL_KEY]: mergeMessages(history, prev[GLOBAL_KEY] || [])
         }))
         setHistoryLoaded((prev) => new Set(prev).add(GLOBAL_KEY))
         setLoadingHistory(false)
       })
     } else {
+      // Load private chat history — merge with any real-time messages
       socket.emit('message:history', { with: selectedUser }, (history) => {
         setMessages((prev) => ({
           ...prev,
-          [selectedUser]: history
+          [selectedUser]: mergeMessages(history, prev[selectedUser] || [])
         }))
         setHistoryLoaded((prev) => new Set(prev).add(selectedUser))
         setLoadingHistory(false)
@@ -203,6 +258,17 @@ function App() {
     }
   }, [selectedUser])
 
+  /**
+   * Delete a message for everyone.
+   * Only the sender's own messages can be deleted.
+   */
+  const handleDeleteMessage = useCallback((messageId) => {
+    if (!selectedUser || !messageId) return
+
+    const chatPartner = selectedUser === GLOBAL_KEY ? '__global__' : selectedUser
+    socket.emit('message:delete', { messageId, chatPartner })
+  }, [selectedUser])
+
   function handleLogout() {
     localStorage.removeItem('quickchat-username')
     localStorage.removeItem('quickchat-selected')
@@ -236,6 +302,7 @@ function App() {
         selectedUser={selectedUser}
         messages={messages[selectedUser] || []}
         onSendMessage={handleSendMessage}
+        onDeleteMessage={handleDeleteMessage}
         currentUser={username}
         isGlobal={selectedUser === GLOBAL_KEY}
         loadingHistory={loadingHistory}
