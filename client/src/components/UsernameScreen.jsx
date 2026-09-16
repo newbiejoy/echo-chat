@@ -46,7 +46,7 @@ function UsernameScreen({ onJoin }) {
       <div className="w-full max-w-sm mx-4">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-text-primary">
-            💬 QuickChat
+            💬 Echo
           </h1>
           <p className="text-sm text-text-muted mt-1">
             Enter a username to start chatting
