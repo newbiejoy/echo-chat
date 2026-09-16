@@ -160,7 +160,7 @@ io.on('connection', (socket) => {
       from: senderUsername,
       to: data.to,
       text: data.text || '',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toISOString()
     }
 
     if (hasFile) {
@@ -202,7 +202,7 @@ io.on('connection', (socket) => {
       from: senderUsername,
       to: '__global__',
       text: data.text || '',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: new Date().toISOString()
     }
 
     if (hasFile) {

@@ -2,6 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 const SERVER_URL = 'http://localhost:5000'
 
+function formatTime(time) {
+  if (!time) return ''
+  const date = new Date(time)
+  if (isNaN(date.getTime())) return time
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, currentUser, isGlobal, loadingHistory }) {
   const [inputText, setInputText] = useState('')
   const messagesEndRef = useRef(null)
@@ -172,7 +179,7 @@ function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, cu
                   <p className="text-text-primary">{msg.text}</p>
                 )}
 
-                <p className="text-[10px] text-text-muted mt-0.5 text-right">{msg.time}</p>
+                <p className="text-[10px] text-text-muted mt-0.5 text-right">{formatTime(msg.time)}</p>
               </div>
             </div>
           )
