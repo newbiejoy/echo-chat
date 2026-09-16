@@ -1,8 +1,3 @@
-/*
-  Sidebar component.
-  Shows app title, global chat button, and online users list.
-*/
-
 const GLOBAL_KEY = '__global__'
 
 function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadFrom, onLogout, theme, onToggleTheme }) {
@@ -10,7 +5,6 @@ function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadF
 
   return (
     <aside className="w-64 bg-dark-900 border-r border-dark-700 flex flex-col h-full shrink-0">
-      {/* Header */}
       <div className="p-4 border-b border-dark-700 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-text-primary">💬 QuickChat</h1>
@@ -38,7 +32,6 @@ function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadF
         </div>
       </div>
 
-      {/* Global Chat */}
       <div className="px-2 pt-3 pb-1">
         <button
           id="global-chat-button"
@@ -63,14 +56,12 @@ function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadF
 
       <div className="mx-4 my-1 border-t border-dark-700" />
 
-      {/* Online users header */}
       <div className="px-4 pt-2 pb-1">
         <p className="text-xs text-text-muted uppercase">
           Online — {otherUsers.length}
         </p>
       </div>
 
-      {/* User list */}
       <ul className="flex-1 overflow-y-auto px-2">
         {otherUsers.length === 0 ? (
           <li className="px-3 py-4 text-center text-sm text-text-muted">
@@ -86,7 +77,6 @@ function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadF
                          transition-colors
                          ${user === selectedUser ? 'bg-dark-800' : 'hover:bg-dark-800'}`}
             >
-              {/* Simple avatar */}
               <div className="w-8 h-8 rounded-full bg-accent-500 flex items-center justify-center
                               text-xs font-bold text-white">
                 {user[0].toUpperCase()}

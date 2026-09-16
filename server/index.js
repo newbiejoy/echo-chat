@@ -52,31 +52,17 @@ const io = new Server(httpServer, {
 
 app.use(cors({ origin: corsOriginCheck }))
 
-
-/*
-  Serve uploaded files statically.
-  A file saved at server/uploads/abc123.png will be accessible at:
-  http://localhost:5000/uploads/abc123.png
-*/
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 app.get('/', (req, res) => {
   res.json({ message: 'QuickChat server is running' })
 })
 
-/*
-  Multer configuration for file uploads.
-  
-  - storage: saves files to server/uploads/ with a unique name
-  - limits: max 5MB per file (keeps things simple and prevents abuse)
-  - fileFilter: only allow images (jpg, png, gif, webp) and PDFs
-*/
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, path.join(__dirname, 'uploads'))
   },
   filename: (req, file, cb) => {
-    // Create a unique filename: timestamp-randomNumber.extension
     const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1e9)
     const ext = path.extname(file.originalname)
     cb(null, uniqueName + ext)
@@ -85,7 +71,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
     if (allowedTypes.includes(file.mimetype)) {
@@ -96,26 +82,17 @@ const upload = multer({
   }
 })
 
-/*
-  POST /upload — Upload a file.
-  
-  The client sends a multipart form with a single file field named "file".
-  On success, returns the file URL and metadata.
-*/
 app.post('/upload', (req, res) => {
   upload.single('file')(req, res, (err) => {
     if (err) {
-      // Multer error (file too large, wrong type, etc.)
       return res.status(400).json({ error: err.message })
     }
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded.' })
     }
 
-    // Build the public URL for the uploaded file
     const baseUrl = (process.env.SERVER_URL || `http://localhost:${PORT}`).trim()
     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`
-
 
     res.json({
       url: fileUrl,
@@ -125,16 +102,12 @@ app.post('/upload', (req, res) => {
   })
 })
 
-
-// In-memory storage for online users
 const onlineUsers = new Map()
 const socketToUser = new Map()
-
 
 function getOnlineUsersList() {
   return Array.from(onlineUsers.keys())
 }
-
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
@@ -142,13 +115,10 @@ mongoose.connect(process.env.MONGODB_URI)
   })
   .catch((err) => {
     console.error('MongoDB connection error:', err.message)
-    console.warn('⚠ Server will continue without database — messages won\'t be saved')
   })
-
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`)
-
 
   socket.on('user:join', (username, callback) => {
     const trimmed = username?.trim()
@@ -174,15 +144,12 @@ io.on('connection', (socket) => {
     callback({ success: true, users: usersList })
   })
 
-  
   socket.on('message:private', async (data) => {
     const senderUsername = socketToUser.get(socket.id)
     if (!senderUsername) return
 
-    // Basic validation
     if (!data.to || typeof data.to !== 'string') return
 
-    // A message must have either text or a file (or both)
     const hasText = data.text && typeof data.text === 'string' && data.text.trim()
     const hasFile = data.file && data.file.url
     if (!hasText && !hasFile) return
@@ -196,7 +163,6 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
 
-    // Attach file metadata if present
     if (hasFile) {
       message.file = {
         url: data.file.url,
@@ -205,42 +171,29 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Save to MongoDB first so we get a real _id
     if (mongoose.connection.readyState === 1) {
       try {
         const saved = await Message.create(message)
         message._id = saved._id.toString()
       } catch (err) {
         console.error('Failed to save message:', err.message)
-        // Generate a temporary ID so client can still track the message
         message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
       }
     } else {
       message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
     }
 
-    // Send to recipient (if online)
     if (recipientSocketId) {
       io.to(recipientSocketId).emit('message:receive', message)
     }
 
-    // Send back to sender
     socket.emit('message:receive', message)
   })
 
-  /*
-    "message:global" — A user sends a message to the global chat room.
-    
-    Data shape: { text: "message content" }
-    
-    Broadcasts to ALL connected users and saves to the database.
-    We use to: "__global__" to distinguish global messages from private ones.
-  */
   socket.on('message:global', async (data) => {
     const senderUsername = socketToUser.get(socket.id)
     if (!senderUsername) return
 
-    // A message must have either text or a file (or both)
     const hasText = data.text && typeof data.text === 'string' && data.text.trim()
     const hasFile = data.file && data.file.url
     if (!hasText && !hasFile) return
@@ -252,7 +205,6 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
 
-    // Attach file metadata if present
     if (hasFile) {
       message.file = {
         url: data.file.url,
@@ -261,7 +213,6 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Save to MongoDB first so we get a real _id
     if (mongoose.connection.readyState === 1) {
       try {
         const saved = await Message.create(message)
@@ -274,18 +225,9 @@ io.on('connection', (socket) => {
       message._id = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2)
     }
 
-    // Broadcast to ALL connected users (including sender)
     io.emit('message:globalReceive', message)
   })
 
-  /*
-    "message:history" — Load past messages between two users.
-    
-    Data shape: { with: "otherUsername" }
-    
-    Returns the last 50 messages between the requesting user and the other user.
-    We query for messages where (from=me, to=them) OR (from=them, to=me).
-  */
   socket.on('message:history', async (data, callback) => {
     const myUsername = socketToUser.get(socket.id)
     if (!myUsername) {
@@ -293,7 +235,6 @@ io.on('connection', (socket) => {
       return
     }
 
-    // If MongoDB isn't connected, return empty (don't hang)
     if (mongoose.connection.readyState !== 1) {
       callback([])
       return
@@ -306,11 +247,10 @@ io.on('connection', (socket) => {
           { from: data.with, to: myUsername }
         ]
       })
-        .sort({ createdAt: 1 })  // Oldest first
+        .sort({ createdAt: 1 })
         .limit(50)
-        .lean()  // Return plain objects instead of Mongoose documents
+        .lean()
 
-      // Send back only the fields the client needs
       const cleaned = messages.map((msg) => ({
         _id: msg._id.toString(),
         from: msg.from,
@@ -327,13 +267,7 @@ io.on('connection', (socket) => {
     }
   })
 
-  /*
-    "message:globalHistory" — Load past global chat messages.
-    
-    Returns the last 50 global messages (where to === "__global__").
-  */
   socket.on('message:globalHistory', async (callback) => {
-    // If MongoDB isn't connected, return empty (don't hang)
     if (mongoose.connection.readyState !== 1) {
       callback([])
       return
@@ -361,14 +295,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  /*
-    "message:delete" — Delete a message for everyone.
-    
-    Data shape: { messageId: "abc123", chatPartner: "username" or "__global__" }
-    
-    Only the sender of the message can delete it.
-    Removes from DB and notifies all relevant users.
-  */
   socket.on('message:delete', async (data) => {
     const myUsername = socketToUser.get(socket.id)
     if (!myUsername) return
@@ -376,7 +302,6 @@ io.on('connection', (socket) => {
     const { messageId, chatPartner } = data
     if (!messageId || !chatPartner) return
 
-    // Temporary IDs (messages not saved to DB) — just broadcast deletion
     if (messageId.startsWith('tmp_')) {
       if (chatPartner === '__global__') {
         io.emit('message:deleted', { messageId, chatPartner })
@@ -393,18 +318,15 @@ io.on('connection', (socket) => {
     if (mongoose.connection.readyState !== 1) return
 
     try {
-      // Find the message and verify the sender owns it
       const msg = await Message.findById(messageId)
       if (!msg) return
-      if (msg.from !== myUsername) return  // Only sender can delete
+      if (msg.from !== myUsername) return
 
       await Message.findByIdAndDelete(messageId)
 
       if (chatPartner === '__global__') {
-        // Broadcast to everyone for global messages
         io.emit('message:deleted', { messageId, chatPartner: '__global__' })
       } else {
-        // Notify both sender and recipient for private messages
         socket.emit('message:deleted', { messageId, chatPartner })
         const recipientSocketId = onlineUsers.get(msg.to === myUsername ? msg.from : msg.to)
         if (recipientSocketId) {
@@ -416,9 +338,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  /*
-    "disconnect" — Clean up when a user leaves.
-  */
   socket.on('disconnect', () => {
     const username = socketToUser.get(socket.id)
 
@@ -433,7 +352,6 @@ io.on('connection', (socket) => {
   })
 })
 
-// Start the HTTP server
 httpServer.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })

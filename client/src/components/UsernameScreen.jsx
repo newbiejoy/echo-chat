@@ -1,8 +1,3 @@
-/*
-  UsernameScreen component.
-  Shows a simple form to enter a username before joining the chat.
-*/
-
 import { useState } from 'react'
 import { socket } from '../socket'
 
@@ -24,10 +19,8 @@ function UsernameScreen({ onJoin }) {
     setIsLoading(true)
 
     if (socket.connected) {
-      // Already connected — just join directly
       joinWithUsername(trimmed)
     } else {
-      // Not connected yet — connect first, then join once connected
       socket.connect()
       socket.once('connect', () => {
         joinWithUsername(trimmed)
@@ -51,7 +44,6 @@ function UsernameScreen({ onJoin }) {
   return (
     <div className="h-screen flex items-center justify-center bg-dark-950">
       <div className="w-full max-w-sm mx-4">
-        {/* Title */}
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-text-primary">
             💬 QuickChat
@@ -61,7 +53,6 @@ function UsernameScreen({ onJoin }) {
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit}>
           <input
             id="username-input"
