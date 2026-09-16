@@ -7,7 +7,7 @@ function Sidebar({ onlineUsers, selectedUser, onSelectUser, currentUser, unreadF
     <aside className="w-64 bg-dark-900 border-r border-dark-700 flex flex-col h-full shrink-0">
       <div className="p-4 border-b border-dark-700 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-text-primary">💬 QuickChat</h1>
+          <h1 className="text-lg font-bold text-text-primary">💬 Echo</h1>
           <p className="text-xs text-text-muted">
             {currentUser}
           </p>
