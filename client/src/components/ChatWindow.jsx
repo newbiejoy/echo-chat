@@ -255,7 +255,7 @@ function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, cu
       {/* Input bar */}
       <div className="px-4 py-3 bg-dark-900 border-t border-dark-700">
         <div className="flex gap-2 items-center">
-          {/* Hidden file input */}
+          {/* File sharing hidden — re-enable when upload endpoint is fixed
           <input
             ref={fileInputRef}
             type="file"
@@ -263,8 +263,6 @@ function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, cu
             onChange={handleFileSelect}
             className="hidden"
           />
-
-          {/* Attach button */}
           <button
             id="attach-button"
             onClick={() => fileInputRef.current?.click()}
@@ -282,6 +280,7 @@ function ChatWindow({ selectedUser, messages, onSendMessage, onDeleteMessage, cu
               </svg>
             )}
           </button>
+          */}
 
           {/* Text input */}
           <input
